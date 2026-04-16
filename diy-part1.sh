@@ -13,8 +13,10 @@
 # Uncomment a feed source
 #sed -i 's/^#\(.*helloworld\)/\1/' feeds.conf.default
 
+#临时修复上游源码 PR332
+sed -i '/^# Check for rejects\.\.\.$/,/^fi$/d' scripts/patch-kernel.sh
+
 # Add a feed source
 #echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
 #echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
-git clone https://github.com/gdy666/luci-app-lucky.git package/lucky
 git clone https://github.com/sbwml/luci-app-openlist2 package/openlist
