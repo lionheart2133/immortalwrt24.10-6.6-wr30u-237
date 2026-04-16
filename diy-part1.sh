@@ -16,6 +16,7 @@
 #临时修复上游源码 PR332
 set -e
 sed -i '/^# Check for rejects\.\.\.$/,/^fi$/d' scripts/patch-kernel.sh
+sed -i 's/192.168.1.1/192.168.2.1/g' package/base-files/files/bin/config_generate
 
 # Add a feed source
 #echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
