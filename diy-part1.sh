@@ -14,6 +14,7 @@
 #sed -i 's/^#\(.*helloworld\)/\1/' feeds.conf.default
 
 #临时修复上游源码 PR332
+set -e
 sed -i '/^# Check for rejects\.\.\.$/,/^fi$/d' scripts/patch-kernel.sh
 
 # Add a feed source
