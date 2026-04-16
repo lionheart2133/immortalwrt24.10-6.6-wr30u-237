@@ -66,10 +66,6 @@ jobs:
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
         chmod +x $DIY_P1_SH
         cd openwrt
-        # 临时应用 PR #332
-        git fetch origin pull/332/head
-        git cherry-pick FETCH_HEAD
-        #  临时应用结束
         $GITHUB_WORKSPACE/$DIY_P1_SH
 
     - name: Update feeds
