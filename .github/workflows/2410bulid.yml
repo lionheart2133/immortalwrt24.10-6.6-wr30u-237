@@ -165,7 +165,7 @@ jobs:
       run: |
         echo "release_tag=$(date +"%Y.%m.%d-%H%M-immortalwrt24.10-6.6-wr30u-237")" >> $GITHUB_OUTPUT
         touch release.txt
-        echo "WR30U 固件" >> release.txt
+        echo "WR30U 固件（2410非6.6内核）" >> release.txt
         echo "源码分支：openwrt-24.10-6.6" >> release.txt
         echo "后台地址：192.168.2.1" >> release.txt
         echo "默认账号：root" >> release.txt
