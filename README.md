@@ -1,4 +1,4 @@
-> 当前编译的插件：passwall（singbox）+adblock
+> 当前主要编译的插件：passwall（singbox）+ adguardhome + agron主题
 
 **English** | [中文](https://p3terx.com/archives/build-openwrt-with-github-actions.html)
 
