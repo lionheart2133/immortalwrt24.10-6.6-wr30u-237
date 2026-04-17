@@ -22,3 +22,6 @@ sed -i 's/192.168.6.1/192.168.2.1/g' package/base-files/files/bin/config_generat
 #echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
 #echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
 git clone https://github.com/sbwml/luci-app-openlist2 package/openlist
+#adguardhome
+git clone https://github.com/rufengsuixing/luci-app-adguardhome package/luci-app-adguardhome
+chmod -R 755 ./package/luci-app-adguardhome/*
