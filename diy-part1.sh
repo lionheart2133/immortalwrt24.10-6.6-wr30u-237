@@ -15,7 +15,7 @@
 
 #临时修复上游源码 PR332
 set -e
-sed -i '/^# Check for rejects\.\.\.$/,/^fi$/d' scripts/patch-kernel.sh
+sed -i '/^# Check for rejects\.\.\.$/,$d' scripts/patch-kernel.sh
 sed -i 's/192.168.6.1/192.168.2.1/g' package/base-files/files/bin/config_generate
 
 # Add a feed source
