@@ -1,27 +1,15 @@
-#!/bin/bash
-#
-# Copyright (c) 2019-2020 P3TERX <https://p3terx.com>
-#
-# This is free software, licensed under the MIT License.
-# See /LICENSE for more information.
-#
-# https://github.com/P3TERX/Actions-OpenWrt
-# File name: diy-part1.sh
-# Description: OpenWrt DIY script part 1 (Before Update feeds)
-#
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Uncomment a feed source
-#sed -i 's/^#\(.*helloworld\)/\1/' feeds.conf.default
+source_dir="${1:-.}"
+config_generate="$source_dir/package/base-files/files/bin/config_generate"
 
-#临时修复上游源码 PR332
-set -e
-sed -i '/^# Check for rejects\.\.\.$/,$d' scripts/patch-kernel.sh
-sed -i 's/192.168.6.1/192.168.2.1/g' package/base-files/files/bin/config_generate
-
-# Add a feed source
-#echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
-#echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
-git clone https://github.com/sbwml/luci-app-openlist2 package/openlist
-#adguardhome
-git clone https://github.com/rufengsuixing/luci-app-adguardhome package/luci-app-adguardhome
-chmod -R 755 ./package/luci-app-adguardhome/*
+if grep -q 'ipad=${ipaddr:-"192.168.2.1"}' "$config_generate"; then
+  echo "Default LAN address is already 192.168.2.1"
+elif grep -q 'ipad=${ipaddr:-"192.168.6.1"}' "$config_generate"; then
+  sed -i 's/ipad=${ipaddr:-"192\.168\.6\.1"}/ipad=${ipaddr:-"192.168.2.1"}/' "$config_generate"
+  echo "Changed default LAN address to 192.168.2.1"
+else
+  echo "Unable to locate the upstream default LAN address in $config_generate" >&2
+  exit 1
+fi

@@ -1,16 +1,17 @@
-#!/bin/bash
-#
-# Copyright (c) 2019-2020 P3TERX <https://p3terx.com>
-#
-# This is free software, licensed under the MIT License.
-# See /LICENSE for more information.
-#
-# https://github.com/P3TERX/Actions-OpenWrt
-# File name: diy-part2.sh
-# Description: OpenWrt DIY script part 2 (After Update feeds)
-#
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Modify default IP
-sudo apt install libfuse-dev
-rm -rf feeds/packages/lang/golang
-git clone https://github.com/sbwml/packages_lang_golang -b 24.x feeds/packages/lang/golang
+source_dir="${1:-.}"
+cd "$source_dir"
+
+make defconfig
+grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_xiaomi_mi-router-wr30u-ubootmod=y' .config
+grep -qx 'CONFIG_PACKAGE_luci-app-homeproxy=y' .config
+grep -qx 'CONFIG_PACKAGE_sing-box=y' .config
+
+if grep -q '^CONFIG_PACKAGE_.*leigod.*=y$' .config; then
+  echo "Unexpected Leigod package found in .config" >&2
+  exit 1
+fi
+
+echo "Configuration validated: WR30U U-Boot Mod + HomeProxy"

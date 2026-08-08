@@ -1,46 +1,60 @@
-> 当前主要编译的插件：passwall（singbox）+ adguardhome + agron主题
+# ImmortalWrt 24.10 / Linux 6.6 for Xiaomi WR30U
 
-**English** | [中文](https://p3terx.com/archives/build-openwrt-with-github-actions.html)
+这是小米 WR30U（U-Boot Mod 布局）的可复现 ImmortalWrt 构建配置与 GitHub Actions 工作流。
 
-# Actions-OpenWrt
+## 当前基线
 
-[![LICENSE](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat-square&label=LICENSE)](https://github.com/P3TERX/Actions-OpenWrt/blob/master/LICENSE)
-![GitHub Stars](https://img.shields.io/github/stars/P3TERX/Actions-OpenWrt.svg?style=flat-square&label=Stars&logo=github)
-![GitHub Forks](https://img.shields.io/github/forks/P3TERX/Actions-OpenWrt.svg?style=flat-square&label=Forks&logo=github)
+| 项目 | 值 |
+| --- | --- |
+| 上游源码 | `padavanonly/immortalwrt-mt798x-24.10` |
+| 上游分支 | `openwrt-24.10-6.6` |
+| 配置基线 | `defconfig/mt7981-ax3000.config` |
+| 设备目标 | `xiaomi_mi-router-wr30u-ubootmod` |
+| 默认 LAN 地址 | `192.168.2.1` |
+| 自定义插件 | HomeProxy（含 sing-box） |
+| 配置生成日期 | 2026-08-08 |
+| 源码提交 | `ec9ef10efc65da1e6d1de4e2c043c0e13d08eed8` |
+| `.config` SHA-256 | `44718aa453bf9ce496e19452d90c4d8a68c71b7b7090647fcd2be855f8d4db35` |
 
-A template for building OpenWrt with GitHub Actions
+顶层 [`.config`](./.config) 是经过 `make defconfig` 展开的完整快照；[`config/custom.config`](./config/custom.config) 只记录长期维护所需的选择，是以后适配上游变化时的主要配置来源。
 
-## Usage
+## GitHub Actions 构建
 
-- Click the [Use this template](https://github.com/P3TERX/Actions-OpenWrt/generate) button to create a new repository.
-- Generate `.config` files using [Lean's OpenWrt](https://github.com/coolsnowwolf/lede) source code. ( You can change it through environment variables in the workflow file. )
-- Push `.config` file to the GitHub repository.
-- Select `Build OpenWrt` on the Actions page.
-- Click the `Run workflow` button.
-- When the build is complete, click the `Artifacts` button in the upper right corner of the Actions page to download the binaries.
+1. 打开仓库的 **Actions** 页面。
+2. 选择 **Build ImmortalWrt WR30U**。
+3. 点击 **Run workflow**。
+4. 普通测试保持 `Publish a GitHub Release` 关闭；确认固件可用后再开启发布。
+5. 构建完成后下载 artifact，其中会保留固件、软件包清单、完整配置、精简配置、源码提交和 SHA-256 校验值。
 
-## Tips
+工作流每次都会从最新上游重新克隆源码、更新 feeds、以 ax3000 模板合并 `config/custom.config`，不会直接信任可能过期的完整 `.config`。
 
-- It may take a long time to create a `.config` file and build the OpenWrt firmware. Thus, before create repository to build your own firmware, you may check out if others have already built it which meet your needs by simply [search `Actions-Openwrt` in GitHub](https://github.com/search?q=Actions-openwrt).
-- Add some meta info of your built firmware (such as firmware architecture and installed packages) to your repository introduction, this will save others' time.
+## 本地重新生成配置
 
-## Credits
+在 WSL 中执行：
 
-- [Microsoft Azure](https://azure.microsoft.com)
-- [GitHub Actions](https://github.com/features/actions)
-- [OpenWrt](https://github.com/openwrt/openwrt)
-- [Lean's OpenWrt](https://github.com/coolsnowwolf/lede)
-- [tmate](https://github.com/tmate-io/tmate)
-- [mxschmitt/action-tmate](https://github.com/mxschmitt/action-tmate)
-- [csexton/debugger-action](https://github.com/csexton/debugger-action)
-- [Cowtransfer](https://cowtransfer.com)
-- [WeTransfer](https://wetransfer.com/)
-- [Mikubill/transfer](https://github.com/Mikubill/transfer)
-- [softprops/action-gh-release](https://github.com/softprops/action-gh-release)
-- [ActionsRML/delete-workflow-runs](https://github.com/ActionsRML/delete-workflow-runs)
-- [dev-drprasad/delete-older-releases](https://github.com/dev-drprasad/delete-older-releases)
-- [peter-evans/repository-dispatch](https://github.com/peter-evans/repository-dispatch)
+```bash
+cd /path/to/this-repository
+./scripts/refresh-config.sh /path/to/immortalwrt-mt798x-24.10
+```
 
-## License
+脚本会重新生成源码目录中的 `.config`，校验 WR30U U-Boot Mod 与 HomeProxy 已启用，并把规范化结果同步回本仓库。详细更新流程见 [`docs/MAINTENANCE.md`](./docs/MAINTENANCE.md)。
 
-[MIT](https://github.com/P3TERX/Actions-OpenWrt/blob/main/LICENSE) © [**P3TERX**](https://p3terx.com)
+## 重要提示
+
+- 固件只适用于与 `xiaomi_mi-router-wr30u-ubootmod` 匹配的分区布局；不要刷入原厂 stock 布局设备。
+- 默认密码为空，首次启动后应立即设置强密码。
+- HomeProxy 默认只被编译进固件，不代表首次启动后自动代理流量；请在 LuCI 中配置节点、DNS 和路由规则。
+- 正式本地编译应使用普通 Linux 用户。上游明确不建议以 root 身份编译。
+
+## 可选功能建议
+
+当前模板已经包含 zram、TTYD、流量统计和 MTK 加速组件。以下功能按实际需求再开启，不建议无目的堆叠插件：
+
+- `luci-app-sqm`：链路存在 bufferbloat 时有用，但会降低峰值吞吐并可能与硬件流量卸载冲突。
+- `luci-app-ddns`：仅在需要从公网访问且公网地址会变化时启用。
+- WireGuard：远程回家比暴露 LuCI/SSH 更安全；需要时再加入客户端或服务端组件。
+- `luci-app-upnp`：游戏主机确有自动端口映射需求时启用；同时会扩大局域网设备自动开放端口的权限范围。
+
+## 致谢与许可
+
+构建结构源自 P3TERX Actions-OpenWrt，项目自身脚本按 [MIT License](./LICENSE) 提供；ImmortalWrt 与各软件包遵循各自上游许可证。
