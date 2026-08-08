@@ -122,7 +122,7 @@ jobs:
         working-directory: openwrt
         run: make -j"$(nproc)" || make -j1 V=s
 
-      - name: Collect firmware and reproducibility metadata
+      - name: Collect release firmware
         id: collect
         shell: bash
         env:
@@ -130,25 +130,21 @@ jobs:
         run: |
           set -euo pipefail
           output_dir="$GITHUB_WORKSPACE/openwrt/bin/targets/mediatek/filogic"
+          release_dir="$GITHUB_WORKSPACE/release"
+          device_prefix="immortalwrt-mediatek-filogic-xiaomi_mi-router-wr30u-ubootmod"
           test -d "$output_dir"
-          if ! find "$output_dir" -maxdepth 1 -type f -name '*sysupgrade*' -print -quit | grep -q .; then
+          mkdir -p "$release_dir"
+          find "$output_dir" -maxdepth 1 -type f -name "${device_prefix}*" \
+            \( -name '*.bin' -o -name '*.ubi' -o -name '*.itb' -o -name '*.fip' \) \
+            -exec cp -t "$release_dir" -- {} +
+          if ! find "$release_dir" -maxdepth 1 -type f -name '*sysupgrade*' -print -quit | grep -q .; then
             echo "::error::No sysupgrade firmware image was produced."
             exit 1
           fi
-          cp openwrt/.config "$output_dir/config.full"
-          (cd openwrt && ./scripts/diffconfig.sh) > "$output_dir/config.diff"
-          {
-            echo "source_url=$REPO_URL"
-            echo "source_branch=$REPO_BRANCH"
-            echo "source_commit=$SOURCE_COMMIT"
-            echo "luci_commit=$(git -C openwrt/feeds/luci rev-parse HEAD)"
-            echo "packages_commit=$(git -C openwrt/feeds/packages rev-parse HEAD)"
-            echo "config_snapshot_sha256=$(sha256sum openwrt/.config | cut -d' ' -f1)"
-          } > "$output_dir/build-metadata.txt"
-          (cd "$output_dir" && find . -maxdepth 1 -type f ! -name sha256sums.txt -print0 | sort -z | xargs -0 sha256sum > sha256sums.txt)
+          (cd "$release_dir" && find . -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum > sha256sums)
           source_short="${SOURCE_COMMIT:0:10}"
           release_tag="24.10-${source_short}-wr30u-${GITHUB_RUN_NUMBER}"
-          echo "output_dir=$output_dir" >> "$GITHUB_OUTPUT"
+          echo "release_dir=$release_dir" >> "$GITHUB_OUTPUT"
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
 
       - name: Publish release
@@ -164,8 +160,8 @@ jobs:
             Default LAN: `192.168.2.1`
             Included: HomeProxy, drill, mtr-nojson, iperf3
 
-            Verify `sha256sums.txt` before flashing. Do not flash this image on the stock partition layout.
-          files: ${{ steps.collect.outputs.output_dir }}/*.*
+            Verify `sha256sums` before flashing. Do not flash this image on the stock partition layout.
+          files: ${{ steps.collect.outputs.release_dir }}/*
           fail_on_unmatched_files: true
 
       - name: Record successfully built upstream revision

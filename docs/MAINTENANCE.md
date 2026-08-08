@@ -56,7 +56,7 @@ GitHub Actions 每天北京时间 03:17 执行轻量检查：
 - feeds 是否有缺失依赖、包重命名或冲突。
 - 完整 `.config` 与提交快照是否一致。
 - 镜像是否仍适配约 112MiB UBI 布局，运行内存是否适合 256MB 设备。
-- Release 中是否存在可刷写固件、`config.full`、`config.diff`、`build-metadata.txt` 和 `sha256sums.txt`，并抽查校验和是否匹配。
+- Release 是否只包含 WR30U U-Boot Mod 的设备固件与 `sha256sums`，并抽查校验和是否匹配；配置和维护元数据不作为 Release 资产重复发布。
 
 ## 需求变化时
 

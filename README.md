@@ -27,7 +27,7 @@
 
 之前的测试构建没有 Release，是因为它由 `push` 触发，而旧工作流只在手动输入 `publish_release=true` 时发布。当前工作流已取消普通 push 编译，避免文档或配置提交意外消耗数小时编译资源。
 
-固件只通过仓库的 [Releases](https://github.com/lionheart2133/immortalwrt24.10-6.6-wr30u-237/releases) 交付，不再上传 Actions artifact。每个 Release 包含固件、完整配置、diffconfig、上游及 feeds 提交、构建元数据和 SHA-256 校验文件；下载固件无需进入 Actions 页面。
+固件只通过仓库的 [Releases](https://github.com/lionheart2133/immortalwrt24.10-6.6-wr30u-237/releases) 交付，不再上传 Actions artifact。参照同系列构建项目，每个 Release 只包含 WR30U U-Boot Mod 设备固件和 `sha256sums`；完整配置继续由仓库中的 `.config` 与 `config/custom.config` 维护。
 
 ## 本地重新生成配置
 
@@ -48,7 +48,7 @@ cd /path/to/this-repository
 - 首次启动后立即设置管理员强密码。
 - HomeProxy 被编译进固件不代表默认启用代理；应在 LuCI 中配置节点和路由。
 - 正式本地编译应使用普通 Linux 用户，不建议在 `/root` 中长期编译。
-- 刷机前核对 Release 中的 `sha256sums.txt`，并保留可用的 U-Boot 恢复入口。
+- 刷机前核对 Release 中的 `sha256sums`，并保留可用的 U-Boot 恢复入口。
 
 ## 许可证
 
