@@ -151,16 +151,23 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.collect.outputs.release_tag }}
-          name: ImmortalWrt WR30U ${{ steps.collect.outputs.release_tag }}
+          name: ImmortalWrt WR30U 固件 ${{ steps.collect.outputs.release_tag }}
           body: |
-            Upstream: `${{ env.REPO_URL }}`
-            Branch: `${{ env.REPO_BRANCH }}`
-            Commit: `${{ needs.check-upstream.outputs.source_commit }}`
-            Device: Xiaomi WR30U (U-Boot Mod layout)
-            Default LAN: `192.168.2.1`
-            Included: HomeProxy, drill, mtr-nojson, iperf3
+            ## 固件信息
 
-            Verify `sha256sums` before flashing. Do not flash this image on the stock partition layout.
+            - 上游源码：`${{ env.REPO_URL }}`
+            - 源码分支：`${{ env.REPO_BRANCH }}`
+            - 源码提交：`${{ needs.check-upstream.outputs.source_commit }}`
+            - 适用设备：小米 WR30U
+            - 分区布局：U-Boot Mod
+            - 默认管理地址：`192.168.2.1`
+            - 内置组件：HomeProxy、drill、mtr-nojson、iperf3
+
+            ## 下载与校验
+
+            日常升级请使用文件名中带有 `squashfs-sysupgrade` 的固件。刷写前请使用 `sha256sums` 核对文件完整性。
+
+            **警告：本固件仅适用于 U-Boot Mod 分区布局，不得刷入原厂分区布局。**
           files: ${{ steps.collect.outputs.release_dir }}/*
           fail_on_unmatched_files: true
 
