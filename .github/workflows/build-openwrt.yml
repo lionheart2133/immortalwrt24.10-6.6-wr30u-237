@@ -1,29 +1,16 @@
 name: Build ImmortalWrt WR30U
 
 on:
-  push:
-    branches:
-      - openwrt-24.10-6.6
-    paths:
-      - .config
-      - config/**
-      - diy-part1.sh
-      - diy-part2.sh
-      - scripts/**
-      - .github/workflows/build-openwrt.yml
+  schedule:
+    # Check upstream once per day at 03:17 Asia/Shanghai (19:17 UTC).
+    - cron: "17 19 * * *"
   workflow_dispatch:
-    inputs:
-      publish_release:
-        description: Publish a GitHub Release
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: write
 
 concurrency:
-  group: wr30u-${{ github.ref }}
+  group: wr30u-upstream-build
   cancel-in-progress: false
 
 env:
@@ -32,7 +19,39 @@ env:
   TZ: Asia/Shanghai
 
 jobs:
+  check-upstream:
+    runs-on: ubuntu-22.04
+    outputs:
+      should_build: ${{ steps.resolve.outputs.should_build }}
+      source_commit: ${{ steps.resolve.outputs.source_commit }}
+    steps:
+      - name: Checkout configuration repository
+        uses: actions/checkout@v4
+
+      - name: Resolve upstream revision
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_commit="$(git ls-remote "$REPO_URL" "refs/heads/$REPO_BRANCH" | awk '{print $1}')"
+          recorded_commit="$(tr -d '[:space:]' < config/upstream.commit)"
+          test -n "$source_commit"
+          test -n "$recorded_commit"
+
+          should_build=false
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" || "$source_commit" != "$recorded_commit" ]]; then
+            should_build=true
+          fi
+
+          echo "source_commit=$source_commit" >> "$GITHUB_OUTPUT"
+          echo "should_build=$should_build" >> "$GITHUB_OUTPUT"
+          echo "Recorded upstream: $recorded_commit"
+          echo "Current upstream:  $source_commit"
+          echo "Build required:     $should_build"
+
   build:
+    needs: check-upstream
+    if: needs.check-upstream.outputs.should_build == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 360
 
@@ -62,11 +81,15 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
           df -hT
 
-      - name: Clone upstream source
+      - name: Clone pinned upstream source
+        env:
+          SOURCE_COMMIT: ${{ needs.check-upstream.outputs.source_commit }}
         run: |
-          git clone --branch "$REPO_BRANCH" --single-branch --filter=blob:none \
-            "$REPO_URL" openwrt
-          git -C openwrt rev-parse HEAD
+          git init openwrt
+          git -C openwrt remote add origin "$REPO_URL"
+          git -C openwrt fetch --depth=1 origin "$SOURCE_COMMIT"
+          git -C openwrt checkout --detach FETCH_HEAD
+          test "$(git -C openwrt rev-parse HEAD)" = "$SOURCE_COMMIT"
 
       - name: Apply source customization
         run: bash diy-part1.sh "$GITHUB_WORKSPACE/openwrt"
@@ -102,45 +125,63 @@ jobs:
       - name: Collect firmware and reproducibility metadata
         id: collect
         shell: bash
+        env:
+          SOURCE_COMMIT: ${{ needs.check-upstream.outputs.source_commit }}
         run: |
           set -euo pipefail
           output_dir="$GITHUB_WORKSPACE/openwrt/bin/targets/mediatek/filogic"
           test -d "$output_dir"
+          if ! find "$output_dir" -maxdepth 1 -type f -name '*sysupgrade*' -print -quit | grep -q .; then
+            echo "::error::No sysupgrade firmware image was produced."
+            exit 1
+          fi
           cp openwrt/.config "$output_dir/config.full"
           (cd openwrt && ./scripts/diffconfig.sh) > "$output_dir/config.diff"
           {
             echo "source_url=$REPO_URL"
             echo "source_branch=$REPO_BRANCH"
-            echo "source_commit=$(git -C openwrt rev-parse HEAD)"
+            echo "source_commit=$SOURCE_COMMIT"
             echo "luci_commit=$(git -C openwrt/feeds/luci rev-parse HEAD)"
             echo "packages_commit=$(git -C openwrt/feeds/packages rev-parse HEAD)"
             echo "config_snapshot_sha256=$(sha256sum openwrt/.config | cut -d' ' -f1)"
           } > "$output_dir/build-metadata.txt"
           (cd "$output_dir" && find . -maxdepth 1 -type f ! -name sha256sums.txt -print0 | sort -z | xargs -0 sha256sum > sha256sums.txt)
-          release_tag="$(date +'%Y.%m.%d-%H%M')-wr30u-ubootmod"
+          source_short="${SOURCE_COMMIT:0:10}"
+          release_tag="24.10-${source_short}-wr30u-${GITHUB_RUN_NUMBER}"
           echo "output_dir=$output_dir" >> "$GITHUB_OUTPUT"
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
 
-      - name: Upload firmware artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: immortalwrt-wr30u-ubootmod-${{ github.run_number }}
-          path: |
-            ${{ steps.collect.outputs.output_dir }}
-            !${{ steps.collect.outputs.output_dir }}/packages/**
-          if-no-files-found: error
-          retention-days: 14
-
       - name: Publish release
-        if: ${{ inputs.publish_release }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.collect.outputs.release_tag }}
           name: ImmortalWrt WR30U ${{ steps.collect.outputs.release_tag }}
           body: |
+            Upstream: `${{ env.REPO_URL }}`
+            Branch: `${{ env.REPO_BRANCH }}`
+            Commit: `${{ needs.check-upstream.outputs.source_commit }}`
             Device: Xiaomi WR30U (U-Boot Mod layout)
-            Default LAN: 192.168.2.1
-            Included customization: HomeProxy
+            Default LAN: `192.168.2.1`
+            Included: HomeProxy, drill, mtr-nojson, iperf3
 
-            Verify sha256sums.txt before flashing. Do not flash this image on the stock partition layout.
+            Verify `sha256sums.txt` before flashing. Do not flash this image on the stock partition layout.
           files: ${{ steps.collect.outputs.output_dir }}/*.*
+          fail_on_unmatched_files: true
+
+      - name: Record successfully built upstream revision
+        if: success()
+        env:
+          SOURCE_COMMIT: ${{ needs.check-upstream.outputs.source_commit }}
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin "$GITHUB_REF_NAME"
+          printf '%s\n' "$SOURCE_COMMIT" > config/upstream.commit
+          if git diff --quiet -- config/upstream.commit; then
+            echo "Upstream revision is already recorded."
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add config/upstream.commit
+          git commit -m "Record built upstream ${SOURCE_COMMIT:0:10}"
+          git push origin "HEAD:$GITHUB_REF_NAME"

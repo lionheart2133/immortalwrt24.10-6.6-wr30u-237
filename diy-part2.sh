@@ -8,10 +8,13 @@ make defconfig
 grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_xiaomi_mi-router-wr30u-ubootmod=y' .config
 grep -qx 'CONFIG_PACKAGE_luci-app-homeproxy=y' .config
 grep -qx 'CONFIG_PACKAGE_sing-box=y' .config
+grep -qx 'CONFIG_PACKAGE_drill=y' .config
+grep -qx 'CONFIG_PACKAGE_mtr-nojson=y' .config
+grep -qx 'CONFIG_PACKAGE_iperf3=y' .config
 
 if grep -q '^CONFIG_PACKAGE_.*leigod.*=y$' .config; then
   echo "Unexpected Leigod package found in .config" >&2
   exit 1
 fi
 
-echo "Configuration validated: WR30U U-Boot Mod + HomeProxy"
+echo "Configuration validated: WR30U U-Boot Mod + HomeProxy + diagnostics"
