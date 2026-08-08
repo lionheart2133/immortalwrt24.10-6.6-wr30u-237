@@ -1,6 +1,16 @@
 name: Build ImmortalWrt WR30U
 
 on:
+  push:
+    branches:
+      - openwrt-24.10-6.6
+    paths:
+      - .config
+      - config/**
+      - diy-part1.sh
+      - diy-part2.sh
+      - scripts/**
+      - .github/workflows/build-openwrt.yml
   workflow_dispatch:
     inputs:
       publish_release:
