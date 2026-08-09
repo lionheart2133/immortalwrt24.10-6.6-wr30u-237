@@ -7,7 +7,8 @@
 - `config/custom.config`：WR30U、HomeProxy、诊断工具和禁用 UPnP 的长期配置意图。
 - `.config`：当前 25.12 上游生成的完整审计快照，不作为下一次更新模板。
 - `config/upstream-25.12.commit`：最后一次成功测试构建的 25.12 上游提交。
-- `diy-part1.sh`：将上游默认 LAN 改为 `192.168.2.1`，找不到预期锚点即失败。
+- `patches/100-wr30u-112m-nmbm.patch`：恢复[上游已作为第三方 U-Boot 布局删除](https://github.com/openwrt/openwrt/commit/1b7e62b20b1735fcdc498a35e005afcd775abcf4)的 WR30U 112M NMBM 设备树、`sysupgrade.bin` 镜像定义，以及 U-Boot 环境、LED、网口和 MAC 地址的运行时识别。
+- `diy-part1.sh`：应用 112M NMBM 补丁并将上游默认 LAN 改为 `192.168.2.1`；任一预期锚点变化即失败。
 - `diy-part2.sh`：执行 `make defconfig`，验证设备、HomeProxy、sing-box、诊断工具和 UPnP 排除项。
 - `scripts/refresh-config.sh`：合并上游模板、应用定制并更新 `.config`。
 - `.github/workflows/build-openwrt.yml`：仅手动构建并发布 25.12 Prerelease。
@@ -17,7 +18,7 @@
 
 1. 获取 `chasey-dev/immortalwrt-mt798x-rebase` 的 `25.12` 最新提交并记录差异。
 2. 更新和安装 feeds，不执行来源不明的远程安装脚本。
-3. 从上游 `defconfig/mt7981-ax3000.config` 重新开始，合并 `config/custom.config`。
+3. 对固定的上游提交应用 112M NMBM 补丁，再从 `defconfig/mt7981-ax3000.config` 重新开始并合并 `config/custom.config`。
 4. 执行 `make defconfig` 和 `diy-part2.sh`，更新顶层 `.config`。
 5. 检查 `.config` 差异、依赖变更、镜像格式和预计闪存占用。
 6. 提交配置与文档，手动触发 Actions。
@@ -27,14 +28,14 @@
 ## 每次更新必须重新验证
 
 - MediaTek 目标仍使用 Linux 6.12，且 feeds 全部指向匹配的 `openwrt-25.12` 分支。
-- WR30U 目标仍为 `xiaomi_mi-router-wr30u-ubootmod`。
-- UBI 分区仍是 `reg = <0x600000 0x7000000>`。
-- 镜像仍为单一 `sysupgrade.itb`，并包含 `KERNEL_IN_UBI`、`UBOOTENV_IN_UBI` 和 `root=/dev/fit0`。
+- WR30U 目标仍为 `xiaomi_mi-router-wr30u-112m-nmbm`，且补丁仍能无偏移、无模糊匹配地应用。
+- 设备树仍包含 `mediatek,nmbm`、64 个保留块上限，以及 `reg = <0x600000 0x7000000>`。
+- 镜像仍为单一 `sysupgrade.bin`，使用传统 kernel/rootfs UBI 卷，不得重新混入 `sysupgrade.itb`、`KERNEL_IN_UBI`、`UBOOTENV_IN_UBI` 或 `/dev/fit0` 契约。
 - HomeProxy 仍能选择 sing-box、firewall4、`kmod-nft-tproxy` 和所需 ucode 模块。
 - UPnP/miniupnpd 没有因依赖重新进入配置。
 - apk 被正确选择，不混用 24.10 的 opkg 软件源或离线包。
 - Release 仅包含设备 sysupgrade 固件与 `sha256sums`，并标记为 Prerelease。
-- Release 中文说明仍明确标注镜像格式变化和不可直接保留配置升级。
+- Release 中文说明仍明确标注 hanwckf `immortalwrt-112m`、NMBM、`.bin` 格式和不可直接保留配置升级。
 
 任一设备契约发生变化时，应让工作流失败并人工审阅，不能仅修改 grep 规则绕过校验。
 

@@ -6,3 +6,4 @@
 .config text eol=lf
 config/upstream*.commit text eol=lf
 *.md text eol=lf
+*.patch text eol=lf whitespace=-blank-at-eol,-space-before-tab

@@ -98,19 +98,25 @@ jobs:
             echo "::warning::Generated .config differs from the committed 25.12 snapshot."
           fi
 
-      - name: Verify WR30U U-Boot Mod image contract
+      - name: Verify WR30U 112M NMBM image contract
         working-directory: openwrt
         shell: bash
         run: |
           set -euo pipefail
           image_makefile=target/linux/mediatek/image/filogic.mk
-          dts=target/linux/mediatek/dts/mt7981b-xiaomi-mi-router-wr30u-ubootmod.dts
-          grep -A35 '^define Device/xiaomi_mi-router-wr30u-ubootmod$' "$image_makefile" > /tmp/wr30u-image.txt
-          grep -q 'IMAGES := sysupgrade.itb' /tmp/wr30u-image.txt
-          grep -q 'KERNEL_IN_UBI := 1' /tmp/wr30u-image.txt
-          grep -q 'UBOOTENV_IN_UBI := 1' /tmp/wr30u-image.txt
+          dts=target/linux/mediatek/dts/mt7981b-xiaomi-mi-router-wr30u-112m-nmbm.dts
+          grep -A20 '^define Device/xiaomi_mi-router-wr30u-112m-nmbm$' "$image_makefile" > /tmp/wr30u-image.txt
+          grep -q 'IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata' /tmp/wr30u-image.txt
+          if grep -qE 'sysupgrade\.itb|KERNEL_IN_UBI|UBOOTENV_IN_UBI' /tmp/wr30u-image.txt; then
+            echo "::error::Unexpected FIT/OpenWrt U-Boot image contract in NMBM target."
+            exit 1
+          fi
           grep -q 'reg = <0x600000 0x7000000>;' "$dts"
-          grep -q 'root=/dev/fit0' "$dts"
+          grep -q 'mediatek,nmbm;' "$dts"
+          grep -q 'mediatek,bmt-max-reserved-blocks = <64>;' "$dts"
+          grep -q 'xiaomi,mi-router-wr30u-112m-nmbm' package/boot/uboot-tools/uboot-envtools/files/mediatek_filogic
+          grep -q 'xiaomi,mi-router-wr30u-112m-nmbm' target/linux/mediatek/filogic/base-files/etc/board.d/01_leds
+          test "$(grep -c 'xiaomi,mi-router-wr30u-112m-nmbm' target/linux/mediatek/filogic/base-files/etc/board.d/02_network)" -eq 2
 
       - name: Download sources
         working-directory: openwrt
@@ -131,20 +137,20 @@ jobs:
           set -euo pipefail
           output_dir="$GITHUB_WORKSPACE/openwrt/bin/targets/mediatek/filogic"
           release_dir="$GITHUB_WORKSPACE/release"
-          device_prefix="immortalwrt-mediatek-filogic-xiaomi_mi-router-wr30u-ubootmod"
+          device_prefix="immortalwrt-mediatek-filogic-xiaomi_mi-router-wr30u-112m-nmbm"
           test -d "$output_dir"
           mkdir -p "$release_dir"
           find "$output_dir" -maxdepth 1 -type f \
-            -name "${device_prefix}*sysupgrade.itb" \
+            -name "${device_prefix}*sysupgrade.bin" \
             -exec cp -t "$release_dir" -- {} +
-          image_count="$(find "$release_dir" -maxdepth 1 -type f -name '*sysupgrade.itb' | wc -l)"
+          image_count="$(find "$release_dir" -maxdepth 1 -type f -name '*sysupgrade.bin' | wc -l)"
           if [[ "$image_count" -ne 1 ]]; then
-            echo "::error::Expected exactly one WR30U 25.12 sysupgrade.itb, found $image_count."
+            echo "::error::Expected exactly one WR30U 25.12 NMBM sysupgrade.bin, found $image_count."
             exit 1
           fi
-          (cd "$release_dir" && sha256sum *sysupgrade.itb > sha256sums)
+          (cd "$release_dir" && sha256sum *sysupgrade.bin > sha256sums)
           source_short="${SOURCE_COMMIT:0:10}"
-          release_tag="25.12-test-${source_short}-wr30u-${GITHUB_RUN_NUMBER}"
+          release_tag="25.12-test-${source_short}-wr30u-nmbm-${GITHUB_RUN_NUMBER}"
           echo "release_dir=$release_dir" >> "$GITHUB_OUTPUT"
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
 
@@ -152,6 +158,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.collect.outputs.release_tag }}
+          target_commitish: ${{ github.sha }}
           name: ImmortalWrt 25.12 WR30U 测试固件 ${{ steps.collect.outputs.release_tag }}
           prerelease: true
           body: |
@@ -162,17 +169,17 @@ jobs:
             - 源码分支：`${{ env.REPO_BRANCH }}`
             - 源码提交：`${{ needs.resolve-source.outputs.source_commit }}`
             - 适用设备：小米 WR30U
-            - 分区布局：OpenWrt U-Boot Mod
-            - 固件格式：`sysupgrade.itb`（FIT 外置 rootfs）
+            - 分区布局：112M UBI，NMBM（适配 hanwckf `immortalwrt-112m`）
+            - 固件格式：`sysupgrade.bin`（传统 kernel/rootfs UBI 卷）
             - 默认管理地址：`192.168.2.1`
             - 内置组件：HomeProxy、drill、mtr-nojson、iperf3
             - UPnP：未编译
 
             ## 重要警告
 
-            本分支的 WR30U 镜像布局与现有 24.10 `sysupgrade.bin` 不同。尚未完成真机启动、保留配置升级和回退验证前，**不要在日常使用的路由器上直接保留配置升级**。测试前必须确认 U-Boot 恢复入口可用，并单独备份现有配置。
+            本固件恢复了上游已经移除的 WR30U 112M NMBM 第三方布局，用于兼容 hanwckf 多布局 U-Boot 的 `immortalwrt-112m` 模式。尚未完成 25.12 真机启动、保留配置升级和回退验证前，**不要在日常使用的路由器上直接保留配置升级**。测试前必须确认 U-Boot 恢复入口可用，并单独备份现有配置。
 
-            Release 只包含一份 WR30U `sysupgrade.itb` 和 `sha256sums`；不提供 Actions artifact。
+            Release 只包含一份 WR30U `sysupgrade.bin` 和 `sha256sums`；不提供 Actions artifact。
           files: ${{ steps.collect.outputs.release_dir }}/*
           fail_on_unmatched_files: true
 

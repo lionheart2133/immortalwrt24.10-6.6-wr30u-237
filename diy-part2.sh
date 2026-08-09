@@ -5,7 +5,7 @@ source_dir="${1:-.}"
 cd "$source_dir"
 
 make defconfig
-grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_xiaomi_mi-router-wr30u-ubootmod=y' .config
+grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_xiaomi_mi-router-wr30u-112m-nmbm=y' .config
 grep -qx 'CONFIG_PACKAGE_luci-app-homeproxy=y' .config
 grep -qx 'CONFIG_PACKAGE_sing-box=y' .config
 grep -qx 'CONFIG_PACKAGE_drill=y' .config
@@ -22,4 +22,4 @@ if grep -q '^CONFIG_PACKAGE_.*leigod.*=y$' .config; then
   exit 1
 fi
 
-echo "Configuration validated: WR30U U-Boot Mod + HomeProxy + diagnostics, without UPnP"
+echo "Configuration validated: WR30U 112M NMBM + HomeProxy + diagnostics, without UPnP"

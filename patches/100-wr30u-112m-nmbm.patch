@@ -1,0 +1,93 @@
+diff --git a/package/boot/uboot-tools/uboot-envtools/files/mediatek_filogic b/package/boot/uboot-tools/uboot-envtools/files/mediatek_filogic
+--- a/package/boot/uboot-tools/uboot-envtools/files/mediatek_filogic
++++ b/package/boot/uboot-tools/uboot-envtools/files/mediatek_filogic
+@@ -182,6 +182,7 @@ ubnt,unifi-6-plus)
+ 	;;
+ xiaomi,mi-router-ax3000t|\
+ xiaomi,mi-router-ax3000t-mtkuboot|\
++xiaomi,mi-router-wr30u-112m-nmbm|\
+ xiaomi,mi-router-wr30u-stock|\
+ xiaomi,mi-router-wr30u-mtkuboot|\
+ xiaomi,redmi-router-ax6000-mtkuboot|\
+diff --git a/target/linux/mediatek/dts/mt7981b-xiaomi-mi-router-wr30u-112m-nmbm.dts b/target/linux/mediatek/dts/mt7981b-xiaomi-mi-router-wr30u-112m-nmbm.dts
+new file mode 100644
+--- /dev/null
++++ b/target/linux/mediatek/dts/mt7981b-xiaomi-mi-router-wr30u-112m-nmbm.dts
+@@ -0,0 +1,23 @@
++// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
++
++/dts-v1/;
++#include "mt7981b-xiaomi-mi-router-wr30u.dtsi"
++
++/ {
++	model = "Xiaomi Mi Router WR30U (112M UBI with NMBM layout)";
++	compatible = "xiaomi,mi-router-wr30u-112m-nmbm", "mediatek,mt7981";
++};
++
++&spi_nand {
++	mediatek,nmbm;
++	mediatek,bmt-max-ratio = <1>;
++	mediatek,bmt-max-reserved-blocks = <64>;
++};
++
++&partitions {
++	partition@600000 {
++		label = "ubi";
++		reg = <0x600000 0x7000000>;
++		compatible = "linux,ubi";
++	};
++};
+diff --git a/target/linux/mediatek/filogic/base-files/etc/board.d/01_leds b/target/linux/mediatek/filogic/base-files/etc/board.d/01_leds
+--- a/target/linux/mediatek/filogic/base-files/etc/board.d/01_leds
++++ b/target/linux/mediatek/filogic/base-files/etc/board.d/01_leds
+@@ -364,6 +364,7 @@ wirelesstag,zx7981pd-ubootmod)
+ 	ucidef_set_led_netdev "wlan2g" "WLAN2G" "wt:wifi:blue" "ra0" "link tx rx"
+ 	ucidef_set_led_netdev "wlan5g" "WLAN5G" "wt:5g:blue" "rai0" "link tx rx"
+ 	;;
++xiaomi,mi-router-wr30u-112m-nmbm|\
+ xiaomi,mi-router-wr30u-stock|\
+ xiaomi,mi-router-wr30u-mtkuboot|\
+ xiaomi,mi-router-wr30u-ubootmod)
+diff --git a/target/linux/mediatek/filogic/base-files/etc/board.d/02_network b/target/linux/mediatek/filogic/base-files/etc/board.d/02_network
+--- a/target/linux/mediatek/filogic/base-files/etc/board.d/02_network
++++ b/target/linux/mediatek/filogic/base-files/etc/board.d/02_network
+@@ -245,6 +245,7 @@ mediatek_setup_interfaces()
+ 	xiaomi,mi-router-ax3000t|\
+ 	xiaomi,mi-router-ax3000t-ubootmod|\
+ 	xiaomi,mi-router-ax3000t-mtkuboot|\
++	xiaomi,mi-router-wr30u-112m-nmbm|\
+ 	xiaomi,mi-router-wr30u-stock|\
+ 	xiaomi,mi-router-wr30u-ubootmod|\
+ 	xiaomi,mi-router-wr30u-mtkuboot|\
+@@ -359,6 +360,7 @@ mediatek_setup_macs()
+ 		;;
+ 	xiaomi,mi-router-ax3000t|\
+ 	xiaomi,mi-router-ax3000t-ubootmod|\
++	xiaomi,mi-router-wr30u-112m-nmbm|\
+ 	xiaomi,mi-router-wr30u-stock|\
+ 	xiaomi,mi-router-wr30u-ubootmod|\
+ 	xiaomi,mi-router-wr30u-mtkuboot|\
+diff --git a/target/linux/mediatek/image/filogic.mk b/target/linux/mediatek/image/filogic.mk
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -3624,6 +3624,20 @@ endif
+ endef
+ TARGET_DEVICES += xiaomi_mi-router-ax3000t-ubootmod
+ 
++define Device/xiaomi_mi-router-wr30u-112m-nmbm
++  DEVICE_VENDOR := Xiaomi
++  DEVICE_MODEL := Mi Router WR30U
++  DEVICE_VARIANT := (112M UBI with NMBM layout)
++  DEVICE_DTS := mt7981b-xiaomi-mi-router-wr30u-112m-nmbm
++  DEVICE_DTS_DIR := ../dts
++  UBINIZE_OPTS := -E 5
++  BLOCKSIZE := 128k
++  PAGESIZE := 2048
++  DEVICE_PACKAGES :=
++  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
++endef
++TARGET_DEVICES += xiaomi_mi-router-wr30u-112m-nmbm
++
+ define Device/xiaomi_mi-router-wr30u-stock
+   DEVICE_VENDOR := Xiaomi
+   DEVICE_MODEL := Mi Router WR30U
