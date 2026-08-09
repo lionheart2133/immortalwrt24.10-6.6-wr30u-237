@@ -6,7 +6,7 @@ repo_dir="$(cd -- "$script_dir/.." && pwd)"
 source_dir="${1:-}"
 
 if [[ -z "$source_dir" || ! -f "$source_dir/defconfig/mt7981-ax3000.config" ]]; then
-  echo "Usage: $0 /path/to/immortalwrt-mt798x-24.10" >&2
+  echo "Usage: $0 /path/to/immortalwrt-mt798x-rebase-25.12" >&2
   exit 2
 fi
 

@@ -1,54 +1,55 @@
-# ImmortalWrt 24.10 / Linux 6.6 for Xiaomi WR30U
+# ImmortalWrt 25.12 测试构建：小米 WR30U
 
-这是小米 WR30U（U-Boot Mod 布局）的可复现 ImmortalWrt 构建配置与 GitHub Actions 工作流。
+这是与正式 `openwrt-24.10-6.6` 分支隔离的迁移测试分支。它用于验证 ImmortalWrt 25.12、Linux 6.12 和新的 WR30U FIT/UBI 镜像布局，不替代已经验证的 24.10 固件。
 
-## 当前基线
+## 测试基线
 
 | 项目 | 值 |
 | --- | --- |
-| 上游源码 | `padavanonly/immortalwrt-mt798x-24.10` |
-| 上游分支 | `openwrt-24.10-6.6` |
+| 本仓库分支 | `25.12-test` |
+| 上游源码 | `chasey-dev/immortalwrt-mt798x-rebase` |
+| 上游分支 | `25.12` |
 | 配置模板 | `defconfig/mt7981-ax3000.config` |
 | 设备目标 | `xiaomi_mi-router-wr30u-ubootmod` |
+| 固件格式 | `sysupgrade.itb`，FIT 外置 rootfs |
 | 默认 LAN | `192.168.2.1` |
 | 代理组件 | HomeProxy（sing-box） |
 | 诊断工具 | drill、mtr-nojson、iperf3、tcpdump、ethtool |
-| 已验证上游提交 | `ec9ef10efc65da1e6d1de4e2c043c0e13d08eed8` |
-| `.config` SHA-256 | `0dd32aa46e5cb6e4efb520c5c7a0d72345a599f37fd5854db8781af83e257b45` |
+| UPnP | 不编译 |
+| 加速策略 | TurboACC/HNAT 组件随上游保留，但首次测试保持关闭 |
+| 候选上游提交 | `6536be32f1db48f342ff9a95f1622c48eeafd47e` |
+| 成功测试构建 | 见 [`config/upstream-25.12.commit`](./config/upstream-25.12.commit) |
+| `.config` SHA-256 | `b3f537359724d7a2ecfae2f4c9594db3325aee382dc113acd69e9c1ec52f5ac2` |
 
-顶层 [`.config`](./.config) 是执行 `make defconfig` 后的完整快照；[`config/custom.config`](./config/custom.config) 只保存需要跨上游更新长期维护的配置意图。不要直接把旧 `.config` 当作下一次更新的模板。
+顶层 [`.config`](./.config) 是 25.12 模板与 [`config/custom.config`](./config/custom.config) 合并并执行 `make defconfig` 后的审计快照。跨上游更新只维护精简配置意图，不沿用 24.10 的完整 `.config`。
 
-## 自动构建与 Release
+## 构建与 Release
 
-工作流有两种入口：
+本分支只允许从 GitHub Actions 手动触发，不设置定时任务，也不响应普通 push。成功后发布中文说明的 **Prerelease**：
 
-- 每天北京时间 03:17 检查一次上游分支。只有上游 HEAD 与 [`config/upstream.commit`](./config/upstream.commit) 不同时才构建；构建成功后自动发布 Release，并记录已经构建的上游提交。
-- 从 Actions 手动运行时，无论上游是否变化都会构建，并始终发布 Release。
+- 只发布一份 WR30U U-Boot Mod `sysupgrade.itb` 和 `sha256sums`；
+- 不上传 Actions artifact；
+- 不发布 preloader、FIP 或 recovery，避免误刷；
+- 成功后才更新 `config/upstream-25.12.commit`。
 
-之前的测试构建没有 Release，是因为它由 `push` 触发，而旧工作流只在手动输入 `publish_release=true` 时发布。当前工作流已取消普通 push 编译，避免文档或配置提交意外消耗数小时编译资源。
+正式 24.10 分支仍按原有计划检查上游并发布稳定 Release，两个构建链路互不覆盖。
 
-固件只通过仓库的 [Releases](https://github.com/lionheart2133/immortalwrt24.10-6.6-wr30u-237/releases) 交付，不再上传 Actions artifact。参照同系列构建项目，每个 Release 只包含 WR30U U-Boot Mod 设备固件和 `sha256sums`；完整配置继续由仓库中的 `.config` 与 `config/custom.config` 维护。
+## 本地刷新配置
 
-## 本地重新生成配置
-
-在 WSL 中执行：
+在 WSL 中完成 25.12 feeds 初始化后执行：
 
 ```bash
 cd /path/to/this-repository
-./scripts/refresh-config.sh /path/to/immortalwrt-mt798x-24.10
+./scripts/refresh-config.sh /path/to/immortalwrt-mt798x-rebase-25.12
 ```
 
-脚本会合并最新 ax3000 模板与 `config/custom.config`，保留 LAN `192.168.2.1`，执行 `make defconfig`，验证设备、HomeProxy 与诊断工具，然后同步完整 `.config`。
+脚本会重新合并上游 ax3000 模板、选择 WR30U U-Boot Mod 和 HomeProxy、移除 UPnP、保留默认 LAN 改动并同步完整 `.config`。
 
-完整更新流程见 [`docs/MAINTENANCE.md`](./docs/MAINTENANCE.md)，DNS、HomeProxy、v2rayN 和无线稳定性建议见 [`docs/NETWORK-STABILITY.md`](./docs/NETWORK-STABILITY.md)。
+## 刷机前提
 
-## 安全提示
+25.12 的 WR30U U-Boot Mod 输出由 24.10 的 `sysupgrade.bin` 变为 `sysupgrade.itb`，并启用了 `KERNEL_IN_UBI`、`UBOOTENV_IN_UBI` 和 `root=/dev/fit0`。虽然 UBI 分区范围保持为 `0x600000 + 0x7000000`，也不能据此认定当前 U-Boot 一定兼容。
 
-- 固件仅适用于 `xiaomi_mi-router-wr30u-ubootmod` 分区布局，不得刷入 stock 布局。
-- 首次启动后立即设置管理员强密码。
-- HomeProxy 被编译进固件不代表默认启用代理；应在 LuCI 中配置节点和路由。
-- 正式本地编译应使用普通 Linux 用户，不建议在 `/root` 中长期编译。
-- 刷机前核对 Release 中的 `sha256sums`，并保留可用的 U-Boot 恢复入口。
+在完成 [`docs/25.12-TESTING.md`](./docs/25.12-TESTING.md) 中的恢复入口、冷启动、配置迁移和回退验证前，不要在日常使用的设备上直接保留配置升级。网络与代理排查建议见 [`docs/NETWORK-STABILITY.md`](./docs/NETWORK-STABILITY.md)，可复用维护流程见 [`docs/MAINTENANCE.md`](./docs/MAINTENANCE.md)。
 
 ## 许可证
 

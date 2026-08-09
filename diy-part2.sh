@@ -12,9 +12,14 @@ grep -qx 'CONFIG_PACKAGE_drill=y' .config
 grep -qx 'CONFIG_PACKAGE_mtr-nojson=y' .config
 grep -qx 'CONFIG_PACKAGE_iperf3=y' .config
 
+if grep -qE '^CONFIG_PACKAGE_(luci-app-upnp|miniupnpd)=y$' .config; then
+  echo "Unexpected UPnP package found in 25.12 test configuration" >&2
+  exit 1
+fi
+
 if grep -q '^CONFIG_PACKAGE_.*leigod.*=y$' .config; then
   echo "Unexpected Leigod package found in .config" >&2
   exit 1
 fi
 
-echo "Configuration validated: WR30U U-Boot Mod + HomeProxy + diagnostics"
+echo "Configuration validated: WR30U U-Boot Mod + HomeProxy + diagnostics, without UPnP"

@@ -1,62 +1,46 @@
-name: Build ImmortalWrt WR30U
+name: Build ImmortalWrt 25.12 Test for WR30U
 
 on:
-  schedule:
-    # Check upstream once per day at 03:17 Asia/Shanghai (19:17 UTC).
-    - cron: "17 19 * * *"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: wr30u-upstream-build
+  group: wr30u-25.12-test
   cancel-in-progress: false
 
 env:
-  REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-24.10
-  REPO_BRANCH: openwrt-24.10-6.6
+  REPO_URL: https://github.com/chasey-dev/immortalwrt-mt798x-rebase
+  REPO_BRANCH: "25.12"
   TZ: Asia/Shanghai
 
 jobs:
-  check-upstream:
+  resolve-source:
     runs-on: ubuntu-22.04
     outputs:
-      should_build: ${{ steps.resolve.outputs.should_build }}
       source_commit: ${{ steps.resolve.outputs.source_commit }}
     steps:
-      - name: Checkout configuration repository
+      - name: Checkout test configuration
         uses: actions/checkout@v4
 
-      - name: Resolve upstream revision
+      - name: Resolve 25.12 source revision
         id: resolve
         shell: bash
         run: |
           set -euo pipefail
           source_commit="$(git ls-remote "$REPO_URL" "refs/heads/$REPO_BRANCH" | awk '{print $1}')"
-          recorded_commit="$(tr -d '[:space:]' < config/upstream.commit)"
           test -n "$source_commit"
-          test -n "$recorded_commit"
-
-          should_build=false
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" || "$source_commit" != "$recorded_commit" ]]; then
-            should_build=true
-          fi
-
           echo "source_commit=$source_commit" >> "$GITHUB_OUTPUT"
-          echo "should_build=$should_build" >> "$GITHUB_OUTPUT"
-          echo "Recorded upstream: $recorded_commit"
-          echo "Current upstream:  $source_commit"
-          echo "Build required:     $should_build"
+          echo "25.12 source: $source_commit"
 
-  build:
-    needs: check-upstream
-    if: needs.check-upstream.outputs.should_build == 'true'
+  build-test:
+    needs: resolve-source
     runs-on: ubuntu-22.04
     timeout-minutes: 360
 
     steps:
-      - name: Checkout configuration repository
+      - name: Checkout test configuration
         uses: actions/checkout@v4
 
       - name: Install build dependencies
@@ -81,9 +65,9 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
           df -hT
 
-      - name: Clone pinned upstream source
+      - name: Clone pinned 25.12 source
         env:
-          SOURCE_COMMIT: ${{ needs.check-upstream.outputs.source_commit }}
+          SOURCE_COMMIT: ${{ needs.resolve-source.outputs.source_commit }}
         run: |
           git init openwrt
           git -C openwrt remote add origin "$REPO_URL"
@@ -100,7 +84,7 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Generate and validate configuration
+      - name: Generate and validate 25.12 configuration
         run: |
           cd openwrt
           perl scripts/kconfig.pl + \
@@ -108,9 +92,25 @@ jobs:
             "$GITHUB_WORKSPACE/config/custom.config" > .config
           bash "$GITHUB_WORKSPACE/diy-part2.sh" "$PWD"
           sha256sum .config
+          grep -qx 'CONFIG_USE_APK=y' .config
+          grep -qx 'CONFIG_PACKAGE_apk-openssl=y' .config
           if ! cmp -s .config "$GITHUB_WORKSPACE/.config"; then
-            echo "::warning::Generated .config differs from the committed snapshot; run scripts/refresh-config.sh after this upstream update."
+            echo "::warning::Generated .config differs from the committed 25.12 snapshot."
           fi
+
+      - name: Verify WR30U U-Boot Mod image contract
+        working-directory: openwrt
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_makefile=target/linux/mediatek/image/filogic.mk
+          dts=target/linux/mediatek/dts/mt7981b-xiaomi-mi-router-wr30u-ubootmod.dts
+          grep -A35 '^define Device/xiaomi_mi-router-wr30u-ubootmod$' "$image_makefile" > /tmp/wr30u-image.txt
+          grep -q 'IMAGES := sysupgrade.itb' /tmp/wr30u-image.txt
+          grep -q 'KERNEL_IN_UBI := 1' /tmp/wr30u-image.txt
+          grep -q 'UBOOTENV_IN_UBI := 1' /tmp/wr30u-image.txt
+          grep -q 'reg = <0x600000 0x7000000>;' "$dts"
+          grep -q 'root=/dev/fit0' "$dts"
 
       - name: Download sources
         working-directory: openwrt
@@ -118,15 +118,15 @@ jobs:
           make download -j"$(nproc)"
           find dl -type f -size -1024c -print -delete
 
-      - name: Compile firmware
+      - name: Compile test firmware
         working-directory: openwrt
         run: make -j"$(nproc)" || make -j1 V=s
 
-      - name: Collect release firmware
+      - name: Collect test release firmware
         id: collect
         shell: bash
         env:
-          SOURCE_COMMIT: ${{ needs.check-upstream.outputs.source_commit }}
+          SOURCE_COMMIT: ${{ needs.resolve-source.outputs.source_commit }}
         run: |
           set -euo pipefail
           output_dir="$GITHUB_WORKSPACE/openwrt/bin/targets/mediatek/filogic"
@@ -134,57 +134,62 @@ jobs:
           device_prefix="immortalwrt-mediatek-filogic-xiaomi_mi-router-wr30u-ubootmod"
           test -d "$output_dir"
           mkdir -p "$release_dir"
-          find "$output_dir" -maxdepth 1 -type f -name "${device_prefix}*" \
-            \( -name '*.bin' -o -name '*.ubi' -o -name '*.itb' -o -name '*.fip' \) \
+          find "$output_dir" -maxdepth 1 -type f \
+            -name "${device_prefix}*sysupgrade.itb" \
             -exec cp -t "$release_dir" -- {} +
-          if ! find "$release_dir" -maxdepth 1 -type f -name '*sysupgrade*' -print -quit | grep -q .; then
-            echo "::error::No sysupgrade firmware image was produced."
+          image_count="$(find "$release_dir" -maxdepth 1 -type f -name '*sysupgrade.itb' | wc -l)"
+          if [[ "$image_count" -ne 1 ]]; then
+            echo "::error::Expected exactly one WR30U 25.12 sysupgrade.itb, found $image_count."
             exit 1
           fi
-          (cd "$release_dir" && find . -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum > sha256sums)
+          (cd "$release_dir" && sha256sum *sysupgrade.itb > sha256sums)
           source_short="${SOURCE_COMMIT:0:10}"
-          release_tag="24.10-${source_short}-wr30u-${GITHUB_RUN_NUMBER}"
+          release_tag="25.12-test-${source_short}-wr30u-${GITHUB_RUN_NUMBER}"
           echo "release_dir=$release_dir" >> "$GITHUB_OUTPUT"
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
 
-      - name: Publish release
+      - name: Publish Chinese prerelease
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.collect.outputs.release_tag }}
-          name: ImmortalWrt WR30U 固件 ${{ steps.collect.outputs.release_tag }}
+          name: ImmortalWrt 25.12 WR30U 测试固件 ${{ steps.collect.outputs.release_tag }}
+          prerelease: true
           body: |
-            ## 固件信息
+            ## 测试固件信息
 
+            - 状态：**预发布测试版，不替代现有 24.10 稳定固件**
             - 上游源码：`${{ env.REPO_URL }}`
             - 源码分支：`${{ env.REPO_BRANCH }}`
-            - 源码提交：`${{ needs.check-upstream.outputs.source_commit }}`
+            - 源码提交：`${{ needs.resolve-source.outputs.source_commit }}`
             - 适用设备：小米 WR30U
-            - 分区布局：U-Boot Mod
+            - 分区布局：OpenWrt U-Boot Mod
+            - 固件格式：`sysupgrade.itb`（FIT 外置 rootfs）
             - 默认管理地址：`192.168.2.1`
             - 内置组件：HomeProxy、drill、mtr-nojson、iperf3
+            - UPnP：未编译
 
-            ## 下载与校验
+            ## 重要警告
 
-            日常升级请使用文件名中带有 `squashfs-sysupgrade` 的固件。刷写前请使用 `sha256sums` 核对文件完整性。
+            本分支的 WR30U 镜像布局与现有 24.10 `sysupgrade.bin` 不同。尚未完成真机启动、保留配置升级和回退验证前，**不要在日常使用的路由器上直接保留配置升级**。测试前必须确认 U-Boot 恢复入口可用，并单独备份现有配置。
 
-            **警告：本固件仅适用于 U-Boot Mod 分区布局，不得刷入原厂分区布局。**
+            Release 只包含一份 WR30U `sysupgrade.itb` 和 `sha256sums`；不提供 Actions artifact。
           files: ${{ steps.collect.outputs.release_dir }}/*
           fail_on_unmatched_files: true
 
-      - name: Record successfully built upstream revision
+      - name: Record successfully built 25.12 revision
         if: success()
         env:
-          SOURCE_COMMIT: ${{ needs.check-upstream.outputs.source_commit }}
+          SOURCE_COMMIT: ${{ needs.resolve-source.outputs.source_commit }}
         run: |
           set -euo pipefail
           git pull --ff-only origin "$GITHUB_REF_NAME"
-          printf '%s\n' "$SOURCE_COMMIT" > config/upstream.commit
-          if git diff --quiet -- config/upstream.commit; then
-            echo "Upstream revision is already recorded."
+          printf '%s\n' "$SOURCE_COMMIT" > config/upstream-25.12.commit
+          if git diff --quiet -- config/upstream-25.12.commit; then
+            echo "25.12 source revision is already recorded."
             exit 0
           fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add config/upstream.commit
-          git commit -m "Record built upstream ${SOURCE_COMMIT:0:10}"
+          git add config/upstream-25.12.commit
+          git commit -m "Record built 25.12 upstream ${SOURCE_COMMIT:0:10}"
           git push origin "HEAD:$GITHUB_REF_NAME"
